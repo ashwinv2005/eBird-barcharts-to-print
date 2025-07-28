@@ -1,4 +1,4 @@
-plotbarchart = function(perc, part, rawpath = "ebird_L2890802__1900_2019_1_12_barchart.txt")
+plotbarchart = function(n.spec.page, dat, indialist, region)
 {
   require(splitstackshape)
   require(magrittr)
@@ -8,31 +8,6 @@ plotbarchart = function(perc, part, rawpath = "ebird_L2890802__1900_2019_1_12_ba
   
   #listmap <- read.delim2("Checklist Mapper.csv", sep=',')
   
-  dat <- read.delim(rawpath, 
-                    na.strings = c("NA", "", "null"), 
-                    as.is=TRUE, 
-                    sep="\t",
-                    header = FALSE,
-                    quote="")
-  
-  # Extract Sample Size into an array
-  sample_size <- dat[4,][2:49]
-  colnames(sample_size) <- 1:48
-  
-  # Remove first four rows that has no data
-  dat <- dat[-c(1,2,3,4),]
-  
-  # Split the species name
-  dat  <- cSplit(dat, 'V1', sep="=", type.convert=FALSE)
-  colnames(dat) <- c(1:49,"COMMON.NAME","SCIENTIFIC.NAME")
-  
-  # Clean the species name
-  dat <- dat %>% 
-    within (COMMON.NAME <- substr(COMMON.NAME,1,nchar(COMMON.NAME)-11)) %>%
-    within (SCIENTIFIC.NAME <- substr(SCIENTIFIC.NAME,1,nchar(SCIENTIFIC.NAME)-6)) %>%
-    within (SCIENTIFIC.NAME <- substr(SCIENTIFIC.NAME,7,nchar(SCIENTIFIC.NAME))) 
-  
-  indialist = read.csv("indiaspecieslist.csv")
   dat = dat %>%
     filter(SCIENTIFIC.NAME %in% indialist$SCIENTIFIC.NAME)
   
@@ -55,14 +30,23 @@ plotbarchart = function(perc, part, rawpath = "ebird_L2890802__1900_2019_1_12_ba
                                             labels =my_labels,
                                             include.lowest = TRUE))
   
+
   l = length(species_list$COMMON.NAME)
-  p = round(l*perc/100)
+  p = n.spec.page
   totp = ceiling(l/p)
   ext = p*totp-l
-  temp = dat[(1):(ext),]
-  temp[,] = NA
-  dat = rbind(dat,temp)
+  temp = as.matrix(dat[(1):(ext),])
+  if (ext == 1)
+  {
+    temp = t(temp)
+  }
+  if (ext > 0)
+  {
+    temp[,] = NA
+    dat = rbind(dat,temp)
+  }
   
+
   for (i in 1:ext)
   {
     a = rep(" ",i)
@@ -77,13 +61,14 @@ plotbarchart = function(perc, part, rawpath = "ebird_L2890802__1900_2019_1_12_ba
     }
   }
   
+  
   # Assign row names
   row.names(dat) <- c(as.character(species_list$COMMON.NAME),as.character(st))
   colnames(dat) <- c(1:48) 
   
   
   
-  saveRDS(dat, "barchart.rds")
+  saveRDS(dat, paste(region,"_barchart.rds",sep=""))
   
   plotdata <- melt(dat)
   colnames(plotdata) <- c("COMMON.NAME","WEEK", "ABUNDANCE")
@@ -99,15 +84,18 @@ plotbarchart = function(perc, part, rawpath = "ebird_L2890802__1900_2019_1_12_ba
   plotdata <- within (plotdata, MONTH <-  getMonth(WEEK))
   
   speclist = as.character(unique(plotdata$COMMON.NAME))
+  pdf(paste(region,"_barchart.pdf",sep=""))
   
-  if(part > totp)
+  for (i in 1:totp)
   {
-    break
+    species = speclist[(p*(i-1)+1):(p*i)]
+    barchart_plot = barchart(plotdata,species)
+    # Print the ggplot to the current page
+    print(barchart_plot)
   }
   
-  species = speclist[(p*(part-1)+1):(p*part)]
-    
-  barchart(plotdata,species)
+  # Close the PDF device
+  dev.off()
 }
 
 
@@ -156,11 +144,11 @@ barchart = function(new,species)
           axis.title.y = element_blank(), 
           axis.text.y  = element_blank(), 
           axis.ticks.y = element_blank(),
-          strip.background.x = element_rect(color = "black", size = 1),
+          strip.background.x = element_rect(color = "black", linewidth = 1),
           #strip.text.x = element_blank(),
           #strip.text.y = element_blank()) +
           strip.text.x = element_text(size = 10, face = "bold"),
-          strip.text.y = element_text(size = 10, face = "bold", angle = 180)) +
+          strip.text.y.left = element_text(size = 8, face = "bold", angle = 0)) +
     theme(legend.position="none") +
     scale_y_continuous(limits = c(-10,10)) +
     scale_fill_manual(values = c("grey","white"), breaks = c("grey","white"))
